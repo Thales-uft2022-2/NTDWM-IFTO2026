@@ -1,4 +1,4 @@
-O# 🎓 Sistema Acadêmico Monolítico
+🎓 Sistema Acadêmico Monolítico
 
 Protótipo desenvolvido para a disciplina **Novas Tecnologias e Desenvolvimento Web e Mobile – IFTO**.
 
