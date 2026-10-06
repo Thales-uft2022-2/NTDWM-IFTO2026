@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Demo - Microserviço de Usuários</title>
+<style>
+body{font-family:Arial;margin:0;background:#0f172a;color:#e2e8f0}.container{width:min(1000px,92%);margin:40px auto}
+.grid{display:grid;grid-template-columns:1fr 1.4fr;gap:20px}.card{background:#111827;border:1px solid #334155;border-radius:14px;padding:20px}
+input{width:100%;padding:10px;margin:6px 0 12px;box-sizing:border-box;border-radius:8px;border:1px solid #475569;background:#0f172a;color:white}
+button{padding:9px 12px;border:0;border-radius:8px;background:#2563eb;color:#fff;cursor:pointer;margin-right:6px}.danger{background:#b91c1c}
+.user{display:flex;justify-content:space-between;gap:10px;padding:12px 0;border-bottom:1px solid #334155}.user small{display:block;color:#94a3b8}
+.status{margin-top:15px;padding:10px;border-radius:8px;background:#172554}@media(max-width:700px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body><div class="container">
+<h1>Microserviço de Usuários</h1><p>Cliente web consumindo a API REST.</p>
+<div class="grid">
+<section class="card">
+<h2>Cadastro</h2>
+<form id="form">
+<input type="hidden" id="id">
+<label>Nome</label><input id="nome" required>
+<label>E-mail</label><input id="email" type="email" required>
+<button>Salvar</button><button type="button" id="cancelar">Cancelar</button>
+</form><div class="status" id="status">Aguardando operação...</div>
+</section>
+<section class="card"><h2>Usuários</h2><div id="usuarios"></div></section>
+</div></div>
+<script>
+const API='/api/usuarios', form=document.querySelector('#form'), id=document.querySelector('#id'),
+nome=document.querySelector('#nome'), email=document.querySelector('#email'), usuarios=document.querySelector('#usuarios'),
+statusBox=document.querySelector('#status');
+function msg(t){statusBox.textContent=t}
+async function listar(){
+ const r=await fetch(API), j=await r.json(); usuarios.innerHTML='';
+ if(!j.dados?.length){usuarios.innerHTML='<p>Nenhum usuário cadastrado.</p>';return}
+ j.dados.forEach(u=>{const d=document.createElement('div');d.className='user';
+ d.innerHTML=`<div><strong>${u.nome}</strong><small>${u.email}</small></div><div>
+ <button onclick='editar(${JSON.stringify(u)})'>Editar</button><button class="danger" onclick="excluir(${u.id})">Excluir</button></div>`;
+ usuarios.appendChild(d)})
+}
+form.onsubmit=async e=>{e.preventDefault();const uid=id.value;
+ const r=await fetch(uid?`${API}/${uid}`:API,{method:uid?'PUT':'POST',headers:{'Content-Type':'application/json'},
+ body:JSON.stringify({nome:nome.value,email:email.value})});const j=await r.json();msg(j.mensagem||j.erro);
+ if(r.ok){form.reset();id.value='';listar()}}
+window.editar=u=>{id.value=u.id;nome.value=u.nome;email.value=u.email;msg('Editando usuário #'+u.id)}
+window.excluir=async uid=>{if(!confirm('Excluir usuário?'))return;const r=await fetch(`${API}/${uid}`,{method:'DELETE'});const j=await r.json();msg(j.mensagem||j.erro);listar()}
+document.querySelector('#cancelar').onclick=()=>{form.reset();id.value='';msg('Edição cancelada.')}
+listar()
+</script>
+</body></html>

@@ -1,0 +1,14 @@
+{
+  "name": "catalog-service",
+  "version": "1.0.0",
+  "description": "Microserviço de Catálogo de Produtos e Gestão de Estoque",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "amqplib": "^0.10.4",
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  }
+}

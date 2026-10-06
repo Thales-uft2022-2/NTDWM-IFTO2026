@@ -1,0 +1,176 @@
+version: '3.8'
+
+services:
+  # =================================================================
+  # 1. MESSAGE BROKER: RabbitMQ com Painel Administrativo
+  # =================================================================
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: ecommerce-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"     # Protocolo AMQP para microserviços
+      - "15672:15672"   # Painel Web de Gestão (user: guest / pass: guest)
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - backend_net
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics check_running && rabbitmq-diagnostics check_local_alarms"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # =================================================================
+  # 2. AUTH SERVICE: Autenticação, Emissão de JWT e Introspecção
+  # =================================================================
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: ecommerce-auth-service
+    restart: unless-stopped
+    environment:
+      PORT: 4001
+      NODE_ENV: production
+      JWT_SECRET: super-secret-production-key-change-me
+      JWT_EXPIRATION: 1h
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      RABBITMQ_EXCHANGE: ecommerce.events
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - frontend_net
+      - backend_net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+        reservations:
+          cpus: '0.10'
+          memory: 64M
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4001/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # =================================================================
+  # 3. CATALOG SERVICE: Gestão de Produtos (com Circuit Breaker)
+  # Suporta escalabilidade seletiva: docker compose up -d --scale catalog-service=3
+  # =================================================================
+  catalog-service:
+    build:
+      context: ./services/catalog-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      PORT: 4002
+      NODE_ENV: production
+      AUTH_SERVICE_URL: http://auth-service:4001
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      RABBITMQ_EXCHANGE: ecommerce.events
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - frontend_net
+      - backend_net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.75'
+          memory: 384M
+        reservations:
+          cpus: '0.15'
+          memory: 96M
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4002/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # =================================================================
+  # 4. NOTIFICATION SERVICE: Consumidor Assíncrono com Dead Letter Queue
+  # =================================================================
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    container_name: ecommerce-notification-service
+    restart: unless-stopped
+    environment:
+      PORT: 4003
+      NODE_ENV: production
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      RABBITMQ_EXCHANGE: ecommerce.events
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - frontend_net
+      - backend_net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4003/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # =================================================================
+  # 5. API GATEWAY: Ponto Único de Entrada Nginx (Porta Externa 8080)
+  # =================================================================
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: ecommerce-api-gateway
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      catalog-service:
+        condition: service_healthy
+    networks:
+      - frontend_net
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 3s
+
+# =================================================================
+# REDES: Isolamento de Rede (Segregação de Tráfego)
+# =================================================================
+networks:
+  # Rede pública para comunicação do Gateway com os serviços
+  frontend_net:
+    driver: bridge
+  # Rede privada para comunicação interna entre serviços e broker (sem exposição pública)
+  backend_net:
+    driver: bridge
+
+# =================================================================
+# VOLUMES: Persistência de Dados
+# =================================================================
+volumes:
+  rabbitmq_data:
+    driver: local
