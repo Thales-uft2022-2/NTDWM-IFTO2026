@@ -1,0 +1,10 @@
+import {useEffect,useState} from 'react'; import {academicoApi} from '../services/api.js'; import {useAuth} from '../context/AuthContext.jsx'; import Feedback from '../components/Feedback.jsx';
+const inicial={nome:'',matricula:'',curso:'Sistemas para Internet',email:''};
+export default function Alunos(){const {usuario}=useAuth();const [alunos,setAlunos]=useState([]);const [form,setForm]=useState(inicial);const [erro,setErro]=useState('');const [sucesso,setSucesso]=useState('');
+async function carregar(){try{const {data}=await academicoApi.get('/alunos');setAlunos(data)}catch(e){setErro(e.response?.data?.erro||'Erro ao carregar alunos.')}}
+useEffect(()=>{carregar()},[]);
+async function salvar(e){e.preventDefault();setErro('');setSucesso('');try{await academicoApi.post('/alunos',form);setForm(inicial);setSucesso('Aluno cadastrado.');carregar()}catch(e){setErro(e.response?.data?.erro||'Erro ao cadastrar aluno.')}}
+async function excluir(id){if(!confirm('Excluir este aluno?'))return;try{await academicoApi.delete(`/alunos/${id}`);carregar()}catch(e){setErro(e.response?.data?.erro||'Erro ao excluir aluno.')}}
+return <><h1>Alunos</h1><Feedback erro={erro} sucesso={sucesso}/>
+{usuario?.perfil==='ADMIN'&&<form className="card form-grid" onSubmit={salvar}><input placeholder="Nome" value={form.nome} onChange={e=>setForm({...form,nome:e.target.value})} required/><input placeholder="Matrícula" value={form.matricula} onChange={e=>setForm({...form,matricula:e.target.value})} required/><input placeholder="Curso" value={form.curso} onChange={e=>setForm({...form,curso:e.target.value})} required/><input type="email" placeholder="E-mail" value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/><button>Cadastrar aluno</button></form>}
+<div className="card table-wrap"><table><thead><tr><th>Nome</th><th>Matrícula</th><th>Curso</th><th>E-mail</th><th>Ação</th></tr></thead><tbody>{alunos.map(a=><tr key={a.id}><td>{a.nome}</td><td>{a.matricula}</td><td>{a.curso}</td><td>{a.email||'-'}</td><td>{usuario?.perfil==='ADMIN'?<button className="danger small" onClick={()=>excluir(a.id)}>Excluir</button>:'-'}</td></tr>)}</tbody></table></div></>}

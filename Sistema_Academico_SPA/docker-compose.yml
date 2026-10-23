@@ -1,0 +1,71 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: academico_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_USER: ${MYSQL_USER:-academico}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-academico123}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  usuarios:
+    build: ./microservico_usuarios
+    container_name: academico_usuarios
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      PORT: 3001
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: usuarios_db
+      DB_USER: ${MYSQL_USER:-academico}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-academico123}
+      JWT_SECRET: ${JWT_SECRET:-ifto_ntdwm_chave_super_secreta_2026}
+      ADMIN_NAME: ${ADMIN_NAME:-Administrador IFTO}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@ifto.edu.br}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-123456}
+    ports:
+      - "3001:3001"
+
+  academico:
+    build: ./microservico_academico
+    container_name: academico_api
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      PORT: 3002
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: academico_db
+      DB_USER: ${MYSQL_USER:-academico}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-academico123}
+      JWT_SECRET: ${JWT_SECRET:-ifto_ntdwm_chave_super_secreta_2026}
+    ports:
+      - "3002:3002"
+
+  frontend:
+    build: ./frontend
+    container_name: academico_frontend
+    restart: unless-stopped
+    depends_on:
+      - usuarios
+      - academico
+    ports:
+      - "5173:5173"
+
+volumes:
+  mysql_data:
