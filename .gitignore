@@ -1,0 +1,11 @@
+# Flutter e Dart
+.dart_tool/
+.packages
+.pub/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Android e IDE
+.idea/
+.vscode/
